@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from pydantic import Field, HttpUrl
 
-from .base import BaseEntity, Currency, UnitType
+from .base import BaseEntity, Currency, UnitType, DataCollectionMethod
 
 
 class Product(BaseEntity):
@@ -34,12 +34,45 @@ class Product(BaseEntity):
     nutrition_info: Optional[dict] = Field(None, description="Nutritional information")
     keywords: List[str] = Field(default_factory=list, description="Search keywords for matching")
     
+    # Data collection metadata
+    collection_method: DataCollectionMethod = Field(
+        default=DataCollectionMethod.AUTOMATED_STEALTH, 
+        description="Method used to collect this product data"
+    )
+    confidence_score: float = Field(
+        default=1.0, 
+        ge=0.0, 
+        le=1.0, 
+        description="Confidence in data accuracy (0.0-1.0)"
+    )
+    source_metadata: Optional[dict] = Field(
+        None, 
+        description="Additional metadata about data source and collection"
+    )
+    
     def calculate_price_per_unit(self) -> Optional[Decimal]:
         """Calculate price per unit if size information is available."""
         if self.size and self.size > 0:
             current_price = self.sale_price if self.on_sale and self.sale_price else self.price
             return current_price / Decimal(str(self.size))
         return None
+    
+    def get_collection_confidence_weight(self) -> float:
+        """Get confidence weight based on collection method and score.
+        
+        Returns:
+            Weighted confidence score considering collection method reliability.
+        """
+        method_weights = {
+            DataCollectionMethod.HUMAN_BROWSER: 1.0,      # Highest reliability
+            DataCollectionMethod.CLIPBOARD_MANUAL: 0.95,  # High reliability (human verified)
+            DataCollectionMethod.API_DIRECT: 0.9,         # High reliability (official API)
+            DataCollectionMethod.AUTOMATED_STEALTH: 0.8,  # Good reliability but automated
+            DataCollectionMethod.MOCK_DATA: 0.1,          # Low reliability (test data)
+        }
+        
+        method_weight = method_weights.get(self.collection_method, 0.5)
+        return self.confidence_score * method_weight
     
     def __post_init__(self):
         """Calculate price per unit after initialization."""
@@ -58,7 +91,10 @@ class Product(BaseEntity):
                 "store_id": "metro_ca",
                 "category": "dairy",
                 "in_stock": True,
-                "keywords": ["milk", "organic", "whole milk", "dairy"]
+                "keywords": ["milk", "organic", "whole milk", "dairy"],
+                "collection_method": "automated_stealth",
+                "confidence_score": 0.95,
+                "source_metadata": {"scraper": "stealth_scraper", "timestamp": "2024-01-01T12:00:00Z"}
             }
         }
     }

@@ -77,6 +77,33 @@ python test_stealth_scraping.py
 
 # Test advanced scraping with fallbacks
 python test_advanced_scraping.py
+
+# Run comprehensive vector database demonstration
+python demo_vector_search.py
+```
+
+### Vector Database Operations
+```bash
+# Initialize vector database
+grocery-scanner vector init-vector-db
+
+# Search for similar products across all collection methods
+grocery-scanner vector search-similar --query "organic milk" --limit 10
+
+# Add product from clipboard text
+grocery-scanner vector add-clipboard-product --clipboard-text "Organic Milk 2L $7.99"
+
+# Show vector database statistics
+grocery-scanner vector vector-stats
+
+# List products by collection method
+grocery-scanner vector list-vector-products --source human_browser --limit 15
+
+# Test integration with specific scraping layer
+grocery-scanner vector test-integration --method clipboard --query "bread"
+
+# Clear vector database (with confirmation)
+grocery-scanner vector clear-vectors
 ```
 
 ### Environment Setup
@@ -127,10 +154,12 @@ Located in `data_models/`:
 - **Store**: Store configurations and status
 
 ### Database Integration
-- **SQLite database** in `db/grocery_scanner.db`
+- **SQLite database** in `db/grocery_scanner.db` for relational data storage
 - **Database utilities** in `utils/database.py`
-- **Qdrant vector database** for intelligent product matching using embeddings
-- Product data includes vector embeddings for similarity search
+- **Qdrant vector database** for intelligent product similarity search using sentence-transformers
+- **Vector embeddings** generated using `all-MiniLM-L6-v2` model for semantic product matching
+- **Source-aware confidence weighting** based on collection method reliability
+- **Cross-store product matching** with confidence-based ranking
 
 ### Configuration Management
 - **Settings** via Pydantic Settings in `config/settings.py`
@@ -158,43 +187,58 @@ The `mcps/` directory contains a comprehensive **3-layer bot protection bypass s
 - Build price database through normal browsing behavior
 - **Always works** - manual data collection as ultimate fallback
 
-### Data Flow with Bot Protection Bypass
+### Enhanced Data Flow with Vector Intelligence
 1. **Input**: Recipe or ingredient list / product search query
 2. **Layer 1 Attempt**: Automated stealth scraping with anti-detection
 3. **Layer 2 Fallback**: Human-assisted browser automation using your profile
 4. **Layer 3 Fallback**: Intelligent clipboard collection from manual browsing
-5. **Vector Matching**: Ingredients matched to products using embeddings  
-6. **Optimization**: Best deals identified across stores
-7. **Output**: Optimized shopping list with store recommendations
+5. **Vector Processing**: Products normalized and embedded using sentence-transformers
+6. **Intelligent Matching**: Semantic similarity search across all collected products
+7. **Confidence Weighting**: Results ranked by collection method reliability
+8. **Cross-Store Analysis**: Find similar products across different retailers
+9. **Optimization**: Best deals identified using vector similarity and pricing
+10. **Output**: Optimized shopping list with confidence scores and alternatives
 
-**Guarantee**: At least one layer always succeeds, ensuring 100% data collection reliability.
+**Guarantees**: 
+- 100% data collection reliability (at least one layer always succeeds)
+- Intelligent product matching using vector embeddings
+- Source-aware confidence scoring for data quality assessment
 
 ## Project Structure
 
 ```
 agentic_grocery_price_scanner/
 ├── agents/           # LangGraph agent implementations
-├── mcps/            # Model Context Protocol scrapers
-├── data_models/     # Pydantic data models with UUID/timestamp fields
+├── mcps/            # Model Context Protocol scrapers (3-layer bot protection)
+├── data_models/     # Pydantic data models with collection method tracking
+├── vector_db/       # Qdrant vector database integration
+│   ├── qdrant_client.py        # Vector database client with similarity search
+│   ├── embedding_service.py    # Sentence-transformers embedding generation
+│   ├── product_normalizer.py   # Multi-source data normalization
+│   └── scraper_integration.py  # Unified integration service
 ├── config/          # Settings and store configuration management
 ├── utils/           # Database operations and logging utilities
-└── cli.py          # Click-based command interface
+└── cli.py          # Click-based command interface with vector operations
 
 config/
 └── stores.yaml     # Store configurations with selectors and settings
 
-tests/              # Pytest test suite with markers for categorization
+tests/              # Pytest test suite with vector database tests
+├── test_vector_database.py     # Comprehensive vector DB integration tests
 db/                 # SQLite database storage
 logs/               # Application logging output
+demo_vector_search.py           # Vector database demonstration script
 ```
 
 ## Testing Strategy
 
 The project uses **pytest** with custom markers for test categorization:
-- Tests are organized by functionality (unit, integration, network, browser)
+- Tests are organized by functionality (unit, integration, network, browser, vector)
 - Coverage reporting configured with 70% minimum threshold
 - Mock data available through `MockScraperAgent` for development
 - Database tests use transactional rollback for isolation
+- **Vector database tests** validate embedding generation, similarity search, and multi-layer integration
+- **Performance benchmarks** for large-scale vector operations
 
 ## Store Configuration
 Each store in `config/stores.yaml` requires:
@@ -207,8 +251,40 @@ Each store in `config/stores.yaml` requires:
 ## Key Dependencies
 - **LangGraph**: Multi-agent workflow orchestration
 - **Qdrant**: Vector database for product similarity search
+- **Sentence-Transformers**: Text embedding generation (all-MiniLM-L6-v2 model)
 - **Ollama**: Local LLM integration for intelligent matching
 - **Pydantic**: Data validation and settings management
 - **Click**: Command-line interface framework
 - **Selenium/BeautifulSoup**: Web scraping capabilities
+- **Playwright**: Advanced browser automation with stealth capabilities
+- **PyTorch**: Machine learning framework for embeddings
 - **Streamlit**: Web dashboard (planned implementation)
+
+## Vector Database Features
+
+### Advanced Product Matching
+- **Semantic similarity search** using sentence-transformers embeddings
+- **Cross-store product comparison** with confidence-weighted ranking
+- **Multi-source data integration** from automated, human-assisted, and manual collection
+- **Real-time clipboard parsing** for instant product data entry
+
+### Collection Method Tracking
+- **Automated Stealth** (confidence: 0.8): Playwright-based scraping with anti-detection
+- **Human Browser** (confidence: 1.0): Browser automation using existing user sessions
+- **Clipboard Manual** (confidence: 0.95): Human-verified manual data entry
+- **API Direct** (confidence: 0.9): Official store APIs when available
+- **Mock Data** (confidence: 0.1): Testing and development data
+
+### Search Capabilities
+- **Filtered similarity search** by store, collection method, confidence, and stock status
+- **Confidence-weighted results** prioritizing higher-quality data sources
+- **Batch operations** for efficient processing of large product datasets
+- **Quality validation** with automatic data completeness assessment
+
+### CLI Integration
+Complete command-line interface for vector database operations:
+- Initialize and manage vector collections
+- Search across all collected products with advanced filtering
+- Add products from clipboard text with intelligent parsing
+- Monitor collection statistics and data quality metrics
+- Test integration with all 3 scraping layers
