@@ -16,6 +16,7 @@ pytest --cov=agentic_grocery_price_scanner --cov-report=term-missing --cov-repor
 pytest tests/test_data_models.py
 pytest tests/test_human_browser_scraping.py
 pytest tests/test_clipboard_scraper.py
+pytest tests/test_intelligent_scraper.py
 
 # Run specific test markers
 pytest -m unit           # Fast unit tests
@@ -29,6 +30,11 @@ pytest -m "not browser"  # Skip browser tests (for CI environments)
 # Test individual scraping systems
 pytest tests/test_scraping_layers.py -v
 pytest tests/test_all_systems.py -v
+
+# Test Intelligent Scraper Agent
+python test_basic_functionality.py  # Basic functionality test
+python test_intelligent_scraper_demo.py  # Full system demo
+python test_simple_integration.py  # Simple integration test
 ```
 
 ### Code Quality
@@ -80,6 +86,14 @@ python test_advanced_scraping.py
 
 # Run comprehensive vector database demonstration
 python demo_vector_search.py
+
+# Test Intelligent Scraper Agent with real stores
+grocery-scanner intelligent-scrape --query "milk" --stores metro_ca,walmart_ca --strategy adaptive
+
+# Test individual layers of the intelligent scraper
+grocery-scanner test-layer --layer 1 --query "bread" --store metro_ca    # Stealth scraping
+grocery-scanner test-layer --layer 2 --query "eggs" --store walmart_ca   # Human-assisted
+grocery-scanner test-layer --layer 3 --query "flour"                     # Clipboard collection
 ```
 
 ### Vector Database Operations
@@ -126,12 +140,21 @@ cp .env.example .env
 
 ## Architecture Overview
 
-### Multi-Agent System
-The project implements a **LangGraph-based multi-agent system** for grocery price comparison:
+### Intelligent Multi-Agent System
+The project implements a **LangGraph-based intelligent multi-agent system** for grocery price comparison:
 
-- **ScraperAgent** (`agents/scraper_agent.py`): Collects product data from Canadian grocery stores
+- **IntelligentScraperAgent** (`agents/intelligent_scraper_agent.py`): Advanced LangGraph-based agent with 3-layer fallback system
+- **ScraperAgent** (`agents/scraper_agent.py`): Legacy basic scraper (maintained for compatibility)
 - **MockScraperAgent** (`agents/mock_scraper_agent.py`): Demo agent with mock data for testing
 - **BaseAgent** (`agents/base_agent.py`): Abstract base class defining agent interface
+
+### Intelligent Scraper Features
+The **IntelligentScraperAgent** provides breakthrough capabilities:
+- **🧠 LangGraph State Machine**: Advanced workflow orchestration with conditional routing
+- **🛡️ 3-Layer Fallback System**: Automatic escalation (stealth → human → clipboard) with 100% success guarantee
+- **📊 Real-time Analytics**: Performance tracking and adaptive strategy optimization
+- **👤 Human-AI Collaboration**: Seamless integration of automated and manual collection methods
+- **🎯 Intelligent Decision Making**: Context-aware method selection based on historical patterns
 
 ### Store Integration
 Supports three Canadian grocery chains configured in `config/stores.yaml`:
@@ -187,29 +210,46 @@ The `mcps/` directory contains a comprehensive **3-layer bot protection bypass s
 - Build price database through normal browsing behavior
 - **Always works** - manual data collection as ultimate fallback
 
-### Enhanced Data Flow with Vector Intelligence
+### Enhanced Data Flow with Intelligent Scraper Agent
 1. **Input**: Recipe or ingredient list / product search query
-2. **Layer 1 Attempt**: Automated stealth scraping with anti-detection
-3. **Layer 2 Fallback**: Human-assisted browser automation using your profile
-4. **Layer 3 Fallback**: Intelligent clipboard collection from manual browsing
-5. **Vector Processing**: Products normalized and embedded using sentence-transformers
-6. **Intelligent Matching**: Semantic similarity search across all collected products
-7. **Confidence Weighting**: Results ranked by collection method reliability
-8. **Cross-Store Analysis**: Find similar products across different retailers
-9. **Optimization**: Best deals identified using vector similarity and pricing
-10. **Output**: Optimized shopping list with confidence scores and alternatives
+2. **LangGraph Orchestration**: Intelligent workflow with conditional routing and decision logic
+3. **Layer 1 Attempt**: Automated stealth scraping with anti-detection (Playwright-based)
+4. **Smart Evaluation**: Success rate analysis and adaptive escalation decisions
+5. **Layer 2 Fallback**: Human-assisted browser automation using your existing browser profile
+6. **User Guidance**: Interactive assistance with clear instructions when manual help needed
+7. **Layer 3 Fallback**: Intelligent clipboard collection from manual browsing with real-time parsing
+8. **Vector Processing**: Products normalized and embedded using sentence-transformers
+9. **Intelligent Matching**: Semantic similarity search across all collected products
+10. **Confidence Weighting**: Results ranked by collection method reliability and historical performance
+11. **Cross-Store Analysis**: Find similar products across different retailers with quality scoring
+12. **Analytics & Learning**: Performance tracking and strategy optimization for future collections
+13. **Output**: Optimized shopping list with confidence scores, alternatives, and collection metadata
 
-**Guarantees**: 
-- 100% data collection reliability (at least one layer always succeeds)
-- Intelligent product matching using vector embeddings
-- Source-aware confidence scoring for data quality assessment
+**Enhanced Guarantees**: 
+- 100% data collection reliability (LangGraph ensures at least one layer always succeeds)
+- Intelligent product matching using vector embeddings with confidence weighting
+- Adaptive strategy optimization based on historical performance patterns
+- Real-time user experience with progress tracking and seamless manual assistance
+- Advanced analytics for continuous improvement and method optimization
 
 ## Project Structure
 
 ```
 agentic_grocery_price_scanner/
 ├── agents/           # LangGraph agent implementations
+│   ├── intelligent_scraper_agent.py    # 🚀 Advanced LangGraph agent with 3-layer fallback
+│   ├── scraping_ui.py                  # Real-time UI and progress tracking
+│   ├── database_integration.py         # Database operations with confidence weighting
+│   ├── collection_analytics.py         # Performance analytics and optimization
+│   ├── scraper_agent.py               # Legacy basic scraper (compatibility)
+│   ├── mock_scraper_agent.py          # Demo agent with mock data
+│   └── base_agent.py                  # Abstract base class
 ├── mcps/            # Model Context Protocol scrapers (3-layer bot protection)
+│   ├── stealth_scraper.py             # Layer 1: Automated stealth scraping
+│   ├── human_browser_scraper.py       # Layer 2: Human-assisted automation
+│   ├── clipboard_scraper.py           # Layer 3: Intelligent clipboard collection
+│   ├── advanced_scraper.py            # Multi-strategy scraper with fallbacks
+│   └── crawl4ai_client.py             # Basic web scraping client
 ├── data_models/     # Pydantic data models with collection method tracking
 ├── vector_db/       # Qdrant vector database integration
 │   ├── qdrant_client.py        # Vector database client with similarity search
@@ -223,22 +263,42 @@ agentic_grocery_price_scanner/
 config/
 └── stores.yaml     # Store configurations with selectors and settings
 
-tests/              # Pytest test suite with vector database tests
-├── test_vector_database.py     # Comprehensive vector DB integration tests
+tests/              # Pytest test suite with intelligent scraper tests
+├── test_intelligent_scraper.py         # 🧪 Comprehensive intelligent agent tests
+├── test_vector_database.py             # Vector DB integration tests
+├── test_scraping_layers.py             # Individual layer testing
+└── test_all_systems.py                 # End-to-end system tests
+
+# Demo and testing scripts
+test_basic_functionality.py             # 🧪 Core functionality verification
+test_intelligent_scraper_demo.py        # 🎬 Full system demonstration
+test_simple_integration.py              # Quick integration test
+demo_vector_search.py                   # Vector database demonstration
+
 db/                 # SQLite database storage
-logs/               # Application logging output
-demo_vector_search.py           # Vector database demonstration script
+logs/               # Application logging and analytics output
+INTELLIGENT_SCRAPER_SUMMARY.md          # 📋 Complete implementation summary
 ```
 
 ## Testing Strategy
 
-The project uses **pytest** with custom markers for test categorization:
-- Tests are organized by functionality (unit, integration, network, browser, vector)
+The project uses **pytest** with comprehensive test coverage for the intelligent scraper system:
+- **Intelligent Agent Tests**: LangGraph workflow, decision logic, fallback chain validation
+- **Layer-specific Tests**: Individual testing of stealth, human-assisted, and clipboard collection
+- **Integration Tests**: Cross-component interaction and end-to-end workflow testing
+- **Performance Tests**: Load testing, response time benchmarks, and scalability validation
+- **UI/UX Tests**: Progress tracking, user interaction, and callback system testing
+- **Database Tests**: Vector similarity, confidence weighting, and data persistence
+- **Analytics Tests**: Performance tracking, optimization, and learning algorithm validation
+
+### Test Categories with Custom Markers:
+- Tests are organized by functionality (unit, integration, network, browser, vector, intelligent)
 - Coverage reporting configured with 70% minimum threshold
 - Mock data available through `MockScraperAgent` for development
 - Database tests use transactional rollback for isolation
-- **Vector database tests** validate embedding generation, similarity search, and multi-layer integration
-- **Performance benchmarks** for large-scale vector operations
+- **Intelligent scraper tests** validate LangGraph workflows, decision logic, and multi-layer integration
+- **Vector database tests** validate embedding generation, similarity search, and confidence weighting
+- **Performance benchmarks** for large-scale operations and concurrent scraping
 
 ## Store Configuration
 Each store in `config/stores.yaml` requires:
@@ -282,9 +342,33 @@ Each store in `config/stores.yaml` requires:
 - **Quality validation** with automatic data completeness assessment
 
 ### CLI Integration
-Complete command-line interface for vector database operations:
+Complete command-line interface for both vector database and intelligent scraper operations:
+
+**Vector Database Operations:**
 - Initialize and manage vector collections
 - Search across all collected products with advanced filtering
 - Add products from clipboard text with intelligent parsing
 - Monitor collection statistics and data quality metrics
 - Test integration with all 3 scraping layers
+
+**Intelligent Scraper Operations:**
+- Execute intelligent scraping with adaptive strategy selection
+- Test individual layers with real stores (Metro, Walmart, FreshCo)
+- Monitor real-time progress with UI feedback
+- Access performance analytics and optimization recommendations
+- Seamless integration with database storage and vector search
+
+### Quick Start Commands:
+```bash
+# Test basic functionality
+python test_basic_functionality.py
+
+# Run intelligent scraping with adaptive strategy
+grocery-scanner intelligent-scrape --query "organic milk" --strategy adaptive
+
+# Test individual layers
+grocery-scanner test-layer --layer 1 --query "bread" --store metro_ca
+
+# Full system demonstration
+python test_intelligent_scraper_demo.py
+```
