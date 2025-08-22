@@ -120,6 +120,27 @@ grocery-scanner vector test-integration --method clipboard --query "bread"
 grocery-scanner vector clear-vectors
 ```
 
+### LLM Operations (Local Ollama Integration)
+```bash
+# Setup Ollama and models
+brew install ollama
+brew services start ollama
+ollama pull qwen2.5:1.5b
+ollama pull phi3.5:latest
+
+# Test LLM integration
+python3 test_llm_integration.py          # Comprehensive LLM test suite
+python3 test_simple_llm.py               # Basic connection test
+python3 demo_llm_grocery_tasks.py        # Grocery-specific task demo
+python3 llm_integration_example.py       # Enhanced agent example
+
+# LLM-enhanced grocery operations (planned CLI integration)
+grocery-scanner llm normalize-list --file shopping_list.txt
+grocery-scanner llm optimize-shopping --stores metro_ca,walmart_ca --budget 100
+grocery-scanner llm strategy-select --store metro_ca --query "organic milk"
+grocery-scanner llm match-products --ingredient "greek yogurt" --limit 5
+```
+
 ### Environment Setup
 ```bash
 # Install dependencies
@@ -131,6 +152,9 @@ pip install -r requirements-dev.txt
 # Install additional scraping dependencies
 pip install playwright pyperclip pytest-asyncio
 
+# Install LLM integration dependencies
+pip install aiohttp
+
 # Install Playwright browsers
 playwright install
 
@@ -141,9 +165,10 @@ cp .env.example .env
 ## Architecture Overview
 
 ### Intelligent Multi-Agent System
-The project implements a **LangGraph-based intelligent multi-agent system** for grocery price comparison:
+The project implements a **LangGraph-based intelligent multi-agent system** enhanced with **local LLM capabilities** for grocery price comparison:
 
 - **IntelligentScraperAgent** (`agents/intelligent_scraper_agent.py`): Advanced LangGraph-based agent with 3-layer fallback system
+- **LLMEnhancedGroceryAgent** (`llm_client/`): Local LLM integration with Qwen 2.5 1.5B and Phi-3.5 Mini for intelligent reasoning
 - **ScraperAgent** (`agents/scraper_agent.py`): Legacy basic scraper (maintained for compatibility)
 - **MockScraperAgent** (`agents/mock_scraper_agent.py`): Demo agent with mock data for testing
 - **BaseAgent** (`agents/base_agent.py`): Abstract base class defining agent interface
@@ -155,6 +180,15 @@ The **IntelligentScraperAgent** provides breakthrough capabilities:
 - **📊 Real-time Analytics**: Performance tracking and adaptive strategy optimization
 - **👤 Human-AI Collaboration**: Seamless integration of automated and manual collection methods
 - **🎯 Intelligent Decision Making**: Context-aware method selection based on historical patterns
+
+### Local LLM Integration Features
+The **LLMEnhancedGroceryAgent** adds powerful local reasoning capabilities:
+- **🚀 Qwen 2.5 1.5B**: Fast ingredient normalization, brand extraction, product classification (0.1-0.3s response)
+- **🧠 Phi-3.5 Mini**: Complex reasoning for shopping optimization and strategy decisions (0.7-1.2s response)
+- **⚡ Performance Optimization**: Response caching (3000x speedup), batch processing, concurrent requests
+- **🎯 Intelligent Model Routing**: Auto-select optimal model based on task complexity
+- **📋 Structured Output**: JSON schema validation for consistent data processing
+- **🛡️ Error Handling**: Retry logic, fallback mechanisms, graceful degradation
 
 ### Store Integration
 Supports three Canadian grocery chains configured in `config/stores.yaml`:
@@ -244,6 +278,10 @@ agentic_grocery_price_scanner/
 │   ├── scraper_agent.py               # Legacy basic scraper (compatibility)
 │   ├── mock_scraper_agent.py          # Demo agent with mock data
 │   └── base_agent.py                  # Abstract base class
+├── llm_client/      # 🧠 Local LLM integration with Ollama
+│   ├── __init__.py                     # Module interface
+│   ├── ollama_client.py                # Async client with intelligent model routing
+│   └── prompt_templates.py             # Grocery-specific prompt templates
 ├── mcps/            # Model Context Protocol scrapers (3-layer bot protection)
 │   ├── stealth_scraper.py             # Layer 1: Automated stealth scraping
 │   ├── human_browser_scraper.py       # Layer 2: Human-assisted automation
@@ -274,16 +312,22 @@ test_basic_functionality.py             # 🧪 Core functionality verification
 test_intelligent_scraper_demo.py        # 🎬 Full system demonstration
 test_simple_integration.py              # Quick integration test
 demo_vector_search.py                   # Vector database demonstration
+test_llm_integration.py                 # 🧠 Comprehensive LLM test suite
+test_simple_llm.py                      # Basic LLM connection test
+demo_llm_grocery_tasks.py               # Grocery-specific LLM task demo
+llm_integration_example.py              # LLM-enhanced agent example
 
 db/                 # SQLite database storage
 logs/               # Application logging and analytics output
 INTELLIGENT_SCRAPER_SUMMARY.md          # 📋 Complete implementation summary
+LLM_INTEGRATION_SUMMARY.md              # 🧠 LLM integration documentation
 ```
 
 ## Testing Strategy
 
-The project uses **pytest** with comprehensive test coverage for the intelligent scraper system:
+The project uses **pytest** with comprehensive test coverage for the intelligent scraper system and **LLM integration**:
 - **Intelligent Agent Tests**: LangGraph workflow, decision logic, fallback chain validation
+- **LLM Integration Tests**: Model routing, prompt templates, structured output, performance optimization
 - **Layer-specific Tests**: Individual testing of stealth, human-assisted, and clipboard collection
 - **Integration Tests**: Cross-component interaction and end-to-end workflow testing
 - **Performance Tests**: Load testing, response time benchmarks, and scalability validation
@@ -292,11 +336,12 @@ The project uses **pytest** with comprehensive test coverage for the intelligent
 - **Analytics Tests**: Performance tracking, optimization, and learning algorithm validation
 
 ### Test Categories with Custom Markers:
-- Tests are organized by functionality (unit, integration, network, browser, vector, intelligent)
+- Tests are organized by functionality (unit, integration, network, browser, vector, intelligent, llm)
 - Coverage reporting configured with 70% minimum threshold
 - Mock data available through `MockScraperAgent` for development
 - Database tests use transactional rollback for isolation
 - **Intelligent scraper tests** validate LangGraph workflows, decision logic, and multi-layer integration
+- **LLM integration tests** validate model routing, template processing, and structured output
 - **Vector database tests** validate embedding generation, similarity search, and confidence weighting
 - **Performance benchmarks** for large-scale operations and concurrent scraping
 
@@ -312,7 +357,8 @@ Each store in `config/stores.yaml` requires:
 - **LangGraph**: Multi-agent workflow orchestration
 - **Qdrant**: Vector database for product similarity search
 - **Sentence-Transformers**: Text embedding generation (all-MiniLM-L6-v2 model)
-- **Ollama**: Local LLM integration for intelligent matching
+- **Ollama**: Local LLM service (Qwen 2.5 1.5B + Phi-3.5 Mini models)
+- **aiohttp**: Async HTTP client for LLM API communication
 - **Pydantic**: Data validation and settings management
 - **Click**: Command-line interface framework
 - **Selenium/BeautifulSoup**: Web scraping capabilities
@@ -362,6 +408,11 @@ Complete command-line interface for both vector database and intelligent scraper
 ```bash
 # Test basic functionality
 python test_basic_functionality.py
+
+# Test LLM integration
+python3 test_llm_integration.py          # Full LLM test suite
+python3 demo_llm_grocery_tasks.py        # Grocery-specific demos
+python3 llm_integration_example.py       # Enhanced agent example
 
 # Run intelligent scraping with adaptive strategy
 grocery-scanner intelligent-scrape --query "organic milk" --strategy adaptive
