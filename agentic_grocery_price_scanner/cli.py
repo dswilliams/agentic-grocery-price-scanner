@@ -669,6 +669,499 @@ def clear_vectors() -> None:
         click.echo(f"❌ Error clearing vector database: {e}")
 
 
+# Ingredient Matching Commands
+
+@cli.group()
+def match():
+    """Ingredient-to-product matching operations using MatcherAgent."""
+    pass
+
+
+@match.command()
+@click.option(
+    "--ingredient", 
+    required=True,
+    help="Ingredient name to match"
+)
+@click.option(
+    "--quantity", 
+    type=float,
+    default=1.0,
+    help="Quantity needed"
+)
+@click.option(
+    "--unit", 
+    default="pieces",
+    help="Unit of measurement"
+)
+@click.option(
+    "--category", 
+    help="Ingredient category (e.g., dairy, meat, produce)"
+)
+@click.option(
+    "--alternatives", 
+    help="Alternative names (comma-separated)"
+)
+@click.option(
+    "--strategy", 
+    type=click.Choice(["vector_only", "llm_only", "hybrid", "adaptive"]),
+    default="adaptive",
+    help="Matching strategy to use"
+)
+@click.option(
+    "--confidence-threshold", 
+    type=float,
+    default=0.5,
+    help="Minimum confidence score for matches"
+)
+@click.option(
+    "--max-results", 
+    type=int,
+    default=5,
+    help="Maximum number of matches to return"
+)
+@click.option(
+    "--verbose", 
+    is_flag=True,
+    help="Show detailed matching information"
+)
+def ingredient(ingredient: str, quantity: float, unit: str, category: str, 
+              alternatives: str, strategy: str, confidence_threshold: float, 
+              max_results: int, verbose: bool) -> None:
+    """Match a single ingredient to products."""
+    from .agents.matcher_agent import MatcherAgent
+    from .data_models.ingredient import Ingredient
+    from .data_models.base import UnitType
+    import asyncio
+    
+    async def run_matching():
+        try:
+            click.echo(f"🔍 Matching ingredient: '{ingredient}'")
+            if verbose:
+                click.echo(f"   Strategy: {strategy}")
+                click.echo(f"   Confidence threshold: {confidence_threshold}")
+                click.echo(f"   Max results: {max_results}")
+            
+            # Create ingredient object
+            ingredient_obj = Ingredient(
+                name=ingredient,
+                quantity=quantity,
+                unit=UnitType(unit),
+                category=category,
+                alternatives=alternatives.split(',') if alternatives else []
+            )
+            
+            # Initialize matcher
+            matcher = MatcherAgent()
+            
+            # Progress callback
+            def progress_callback(message: str):
+                if verbose:
+                    click.echo(f"   {message}")
+            
+            # Perform matching
+            result = await matcher.match_ingredient(
+                ingredient=ingredient_obj,
+                strategy=strategy,
+                confidence_threshold=confidence_threshold,
+                max_results=max_results
+            )
+            
+            if result['success']:
+                matches = result['matches']
+                click.echo(f"✅ Found {len(matches)} matches:")
+                click.echo("")
+                
+                for i, match in enumerate(matches, 1):
+                    product = match['product']
+                    confidence = match['confidence']
+                    quality = match['quality'].value
+                    
+                    # Format price display
+                    price_display = f"${product.price}"
+                    if product.on_sale and product.sale_price:
+                        price_display = f"${product.sale_price} (was ${product.price}) 🏷️"
+                    
+                    click.echo(f"{i}. {product.name}")
+                    click.echo(f"   Brand: {product.brand or 'Generic'}")
+                    click.echo(f"   Store: {product.store_id}")
+                    click.echo(f"   Price: {price_display}")
+                    click.echo(f"   Confidence: {confidence:.3f} ({quality})")
+                    
+                    if verbose:
+                        click.echo(f"   Category: {product.category or 'N/A'}")
+                        click.echo(f"   Collection method: {product.collection_method}")
+                        click.echo(f"   Vector score: {match.get('vector_score', 'N/A'):.3f}")
+                        click.echo(f"   LLM confidence: {match.get('llm_confidence', 'N/A'):.3f}")
+                        if 'llm_reason' in match:
+                            click.echo(f"   Reason: {match['llm_reason']}")
+                        if 'category_warning' in match:
+                            click.echo(f"   ⚠️  {match['category_warning']}")
+                    click.echo("")
+                
+                # Show substitution suggestions
+                substitutions = result.get('substitution_suggestions', [])
+                if substitutions:
+                    click.echo(f"🔄 Alternative suggestions ({len(substitutions)}):")
+                    for i, sub in enumerate(substitutions, 1):
+                        sub_product = sub['product']
+                        click.echo(f"{i}. {sub_product.name} - ${sub_product.price}")
+                        click.echo(f"   Type: {sub['type']}")
+                        click.echo(f"   Reason: {sub['reason']}")
+                        click.echo(f"   Confidence: {sub['confidence']:.3f}")
+                    click.echo("")
+                
+                # Show human review flag
+                if result.get('require_human_review', False):
+                    reason = result.get('matching_metadata', {}).get('human_review_reason', 'Unknown')
+                    click.echo(f"👤 Human review recommended: {reason}")
+                
+                # Show category analysis
+                if verbose and result.get('category_analysis'):
+                    category_info = result['category_analysis']
+                    click.echo("📂 Category Analysis:")
+                    click.echo(f"   Expected: {category_info.get('ingredient_category', 'N/A')}")
+                    click.echo(f"   Found categories: {list(category_info.get('product_categories', {}).keys())}")
+                    click.echo(f"   Category consistency: {category_info.get('category_consistency', False)}")
+                
+            else:
+                click.echo(f"❌ Matching failed: {result.get('error', 'Unknown error')}")
+        
+        except Exception as e:
+            click.echo(f"❌ Error during matching: {e}")
+    
+    asyncio.run(run_matching())
+
+
+@match.command()
+@click.option(
+    "--ingredients-file", 
+    type=click.Path(exists=True),
+    help="File containing ingredient list (one per line or JSON)"
+)
+@click.option(
+    "--ingredients", 
+    help="Comma-separated list of ingredients"
+)
+@click.option(
+    "--strategy", 
+    type=click.Choice(["vector_only", "llm_only", "hybrid", "adaptive"]),
+    default="adaptive",
+    help="Matching strategy to use"
+)
+@click.option(
+    "--confidence-threshold", 
+    type=float,
+    default=0.5,
+    help="Minimum confidence score"
+)
+@click.option(
+    "--max-results", 
+    type=int,
+    default=3,
+    help="Maximum matches per ingredient"
+)
+@click.option(
+    "--output", 
+    type=click.Path(),
+    help="Output file for results (JSON)"
+)
+def batch(ingredients_file: str, ingredients: str, strategy: str, 
+          confidence_threshold: float, max_results: int, output: str) -> None:
+    """Match multiple ingredients in batch."""
+    from .agents.matcher_agent import MatcherAgent
+    from .data_models.ingredient import Ingredient
+    from .data_models.base import UnitType
+    import asyncio
+    import json
+    
+    async def run_batch_matching():
+        try:
+            # Parse ingredients
+            ingredient_list = []
+            
+            if ingredients_file:
+                with open(ingredients_file, 'r') as f:
+                    content = f.read().strip()
+                    try:
+                        # Try to parse as JSON
+                        data = json.loads(content)
+                        if isinstance(data, list):
+                            for item in data:
+                                if isinstance(item, str):
+                                    ingredient_list.append(Ingredient(name=item, quantity=1.0, unit=UnitType.PIECES))
+                                elif isinstance(item, dict):
+                                    ingredient_list.append(Ingredient(**item))
+                    except json.JSONDecodeError:
+                        # Parse as line-separated text
+                        for line in content.split('\n'):
+                            line = line.strip()
+                            if line:
+                                ingredient_list.append(Ingredient(name=line, quantity=1.0, unit=UnitType.PIECES))
+            
+            elif ingredients:
+                for ingredient_name in ingredients.split(','):
+                    ingredient_name = ingredient_name.strip()
+                    if ingredient_name:
+                        ingredient_list.append(Ingredient(name=ingredient_name, quantity=1.0, unit=UnitType.PIECES))
+            
+            else:
+                click.echo("❌ Please provide either --ingredients-file or --ingredients")
+                return
+            
+            if not ingredient_list:
+                click.echo("❌ No ingredients found")
+                return
+            
+            click.echo(f"🔍 Batch matching {len(ingredient_list)} ingredients...")
+            
+            # Initialize matcher
+            matcher = MatcherAgent()
+            
+            # Progress tracking
+            results = []
+            
+            for i, ingredient in enumerate(ingredient_list, 1):
+                click.echo(f"[{i}/{len(ingredient_list)}] Matching '{ingredient.name}'...")
+                
+                result = await matcher.match_ingredient(
+                    ingredient=ingredient,
+                    strategy=strategy,
+                    confidence_threshold=confidence_threshold,
+                    max_results=max_results
+                )
+                
+                results.append({
+                    'ingredient': ingredient.name,
+                    'success': result['success'],
+                    'matches': len(result.get('matches', [])),
+                    'result': result
+                })
+                
+                if result['success'] and result['matches']:
+                    best_match = result['matches'][0]
+                    click.echo(f"   ✅ Best: {best_match['product'].name} (conf: {best_match['confidence']:.3f})")
+                else:
+                    click.echo(f"   ❌ No matches found")
+            
+            # Summary
+            successful = sum(1 for r in results if r['success'] and r['matches'] > 0)
+            click.echo(f"\n📊 Batch matching complete:")
+            click.echo(f"   Total ingredients: {len(ingredient_list)}")
+            click.echo(f"   Successfully matched: {successful}")
+            click.echo(f"   Failed to match: {len(ingredient_list) - successful}")
+            
+            # Save results if requested
+            if output:
+                with open(output, 'w') as f:
+                    # Convert results to JSON-serializable format
+                    json_results = []
+                    for result in results:
+                        json_result = {
+                            'ingredient': result['ingredient'],
+                            'success': result['success'],
+                            'matches': result['matches']
+                        }
+                        
+                        if result['result']['success']:
+                            json_result['products'] = []
+                            for match in result['result']['matches']:
+                                product = match['product']
+                                json_result['products'].append({
+                                    'name': product.name,
+                                    'brand': product.brand,
+                                    'price': float(product.price),
+                                    'store': product.store_id,
+                                    'confidence': match['confidence'],
+                                    'quality': match['quality'].value
+                                })
+                        
+                        json_results.append(json_result)
+                    
+                    json.dump(json_results, f, indent=2)
+                    click.echo(f"💾 Results saved to {output}")
+        
+        except Exception as e:
+            click.echo(f"❌ Batch matching failed: {e}")
+    
+    asyncio.run(run_batch_matching())
+
+
+@match.command()
+@click.option(
+    "--ingredient", 
+    required=True,
+    help="Ingredient name for substitution suggestions"
+)
+@click.option(
+    "--max-suggestions", 
+    type=int,
+    default=5,
+    help="Maximum number of suggestions"
+)
+def substitutions(ingredient: str, max_suggestions: int) -> None:
+    """Get substitution suggestions for an ingredient."""
+    from .agents.matcher_agent import MatcherAgent
+    import asyncio
+    
+    async def run_substitutions():
+        try:
+            click.echo(f"🔄 Finding substitutions for: '{ingredient}'")
+            
+            matcher = MatcherAgent()
+            
+            suggestions = await matcher.suggest_substitutions(
+                ingredient_name=ingredient,
+                max_suggestions=max_suggestions
+            )
+            
+            if suggestions:
+                click.echo(f"✅ Found {len(suggestions)} substitution suggestions:")
+                click.echo("")
+                
+                for i, suggestion in enumerate(suggestions, 1):
+                    product = suggestion['product']
+                    sub_type = suggestion['type']
+                    reason = suggestion['reason']
+                    confidence = suggestion['confidence']
+                    
+                    click.echo(f"{i}. {product.name}")
+                    click.echo(f"   Brand: {product.brand or 'Generic'}")
+                    click.echo(f"   Store: {product.store_id}")
+                    click.echo(f"   Price: ${product.price}")
+                    click.echo(f"   Type: {sub_type}")
+                    click.echo(f"   Reason: {reason}")
+                    click.echo(f"   Confidence: {confidence:.3f}")
+                    click.echo("")
+            else:
+                click.echo("❌ No substitution suggestions found")
+        
+        except Exception as e:
+            click.echo(f"❌ Error getting substitutions: {e}")
+    
+    asyncio.run(run_substitutions())
+
+
+@match.command()
+def analytics() -> None:
+    """Show MatcherAgent performance analytics."""
+    from .agents.matcher_agent import MatcherAgent
+    
+    try:
+        matcher = MatcherAgent()
+        analytics = matcher.get_matching_analytics()
+        
+        click.echo("📊 MatcherAgent Performance Analytics:")
+        click.echo("")
+        
+        stats = analytics['matching_stats']
+        click.echo(f"Total matches attempted: {stats['total_matches']}")
+        click.echo(f"Successful matches: {stats['successful_matches']}")
+        click.echo(f"Failed matches: {stats['failed_matches']}")
+        
+        if stats['total_matches'] > 0:
+            success_rate = stats['successful_matches'] / stats['total_matches']
+            click.echo(f"Success rate: {success_rate:.1%}")
+        
+        click.echo(f"Average confidence: {stats['avg_confidence']:.3f}")
+        
+        # Quality distribution
+        quality_dist = stats['quality_distribution']
+        if any(count > 0 for count in quality_dist.values()):
+            click.echo("")
+            click.echo("Quality Distribution:")
+            for quality, count in quality_dist.items():
+                if count > 0:
+                    click.echo(f"  {quality}: {count}")
+        
+        # Strategy performance
+        strategy_perf = stats['strategy_performance']
+        if any(perf['attempts'] > 0 for perf in strategy_perf.values()):
+            click.echo("")
+            click.echo("Strategy Performance:")
+            for strategy, perf in strategy_perf.items():
+                if perf['attempts'] > 0:
+                    success_rate = perf['successes'] / perf['attempts']
+                    click.echo(f"  {strategy}: {success_rate:.1%} ({perf['successes']}/{perf['attempts']})")
+        
+        # Recommendations
+        recommendations = analytics['recommendations']
+        if recommendations:
+            click.echo("")
+            click.echo("Recommendations:")
+            for rec in recommendations:
+                click.echo(f"  • {rec}")
+    
+    except Exception as e:
+        click.echo(f"❌ Error getting analytics: {e}")
+
+
+@match.command()
+@click.option(
+    "--reset-stats", 
+    is_flag=True,
+    help="Reset performance statistics"
+)
+def test(reset_stats: bool) -> None:
+    """Test MatcherAgent functionality with sample data."""
+    from .agents.matcher_agent import MatcherAgent
+    from .data_models.ingredient import Ingredient
+    from .data_models.base import UnitType
+    import asyncio
+    
+    async def run_test():
+        try:
+            click.echo("🧪 Testing MatcherAgent functionality...")
+            
+            # Test ingredients
+            test_ingredients = [
+                Ingredient(name="milk", quantity=2.0, unit=UnitType.CUPS, category="dairy"),
+                Ingredient(name="bread", quantity=1.0, unit=UnitType.PIECES, category="bakery"),
+                Ingredient(name="chicken breast", quantity=1.0, unit=UnitType.POUNDS, category="meat")
+            ]
+            
+            matcher = MatcherAgent()
+            
+            click.echo(f"Testing with {len(test_ingredients)} sample ingredients...")
+            
+            for i, ingredient in enumerate(test_ingredients, 1):
+                click.echo(f"\n[Test {i}] Matching '{ingredient.name}':")
+                
+                result = await matcher.match_ingredient(
+                    ingredient=ingredient,
+                    strategy="adaptive",
+                    confidence_threshold=0.3,
+                    max_results=2
+                )
+                
+                if result['success']:
+                    matches = result['matches']
+                    click.echo(f"  ✅ Found {len(matches)} matches")
+                    
+                    for match in matches:
+                        product = match['product']
+                        confidence = match['confidence']
+                        click.echo(f"    • {product.name} - ${product.price} (conf: {confidence:.3f})")
+                else:
+                    click.echo(f"  ❌ Failed: {result.get('error', 'Unknown error')}")
+            
+            # Test analytics
+            analytics = matcher.get_matching_analytics()
+            stats = analytics['matching_stats']
+            
+            click.echo(f"\n📊 Test Results:")
+            click.echo(f"  Total attempts: {stats['total_matches']}")
+            click.echo(f"  Successful: {stats['successful_matches']}")
+            click.echo(f"  Average confidence: {stats['avg_confidence']:.3f}")
+            
+            click.echo("\n✅ MatcherAgent test completed successfully!")
+        
+        except Exception as e:
+            click.echo(f"❌ Test failed: {e}")
+    
+    asyncio.run(run_test())
+
+
 @vector.command()
 @click.option(
     "--method", 

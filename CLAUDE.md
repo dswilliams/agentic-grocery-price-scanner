@@ -35,6 +35,10 @@ pytest tests/test_all_systems.py -v
 python test_basic_functionality.py  # Basic functionality test
 python test_intelligent_scraper_demo.py  # Full system demo
 python test_simple_integration.py  # Simple integration test
+
+# Test MatcherAgent (ingredient-to-product matching)
+python3 test_matcher_agent.py       # Comprehensive MatcherAgent test suite
+python3 demo_matcher_agent.py       # MatcherAgent demonstration with sample data
 ```
 
 ### Code Quality
@@ -168,6 +172,7 @@ cp .env.example .env
 The project implements a **LangGraph-based intelligent multi-agent system** enhanced with **local LLM capabilities** for grocery price comparison:
 
 - **IntelligentScraperAgent** (`agents/intelligent_scraper_agent.py`): Advanced LangGraph-based agent with 3-layer fallback system
+- **MatcherAgent** (`agents/matcher_agent.py`): 🧠 Intelligent ingredient-to-product matching using vector search + local LLMs
 - **LLMEnhancedGroceryAgent** (`llm_client/`): Local LLM integration with Qwen 2.5 1.5B and Phi-3.5 Mini for intelligent reasoning
 - **ScraperAgent** (`agents/scraper_agent.py`): Legacy basic scraper (maintained for compatibility)
 - **MockScraperAgent** (`agents/mock_scraper_agent.py`): Demo agent with mock data for testing
@@ -180,6 +185,16 @@ The **IntelligentScraperAgent** provides breakthrough capabilities:
 - **📊 Real-time Analytics**: Performance tracking and adaptive strategy optimization
 - **👤 Human-AI Collaboration**: Seamless integration of automated and manual collection methods
 - **🎯 Intelligent Decision Making**: Context-aware method selection based on historical patterns
+
+### MatcherAgent Features 🧠
+The **MatcherAgent** provides intelligent ingredient-to-product matching:
+- **🎯 Vector Search Pipeline**: Semantic similarity search using sentence-transformers with confidence weighting
+- **🏷️ Brand Normalization**: Fuzzy matching for brand variations ("Kellogg's" vs "Kellogs") with intelligent scoring
+- **🤖 LLM Integration**: Local Ollama models for intelligent matching decisions and reasoning
+- **📊 Confidence Scoring**: Multi-signal confidence calculation with quality control thresholds
+- **🔄 Substitution Engine**: Category-aware alternatives and out-of-stock handling
+- **👤 Human Review Flagging**: Automatic escalation for uncertain matches with detailed reasoning
+- **📈 Performance Analytics**: Real-time matching statistics and strategy optimization
 
 ### Local LLM Integration Features
 The **LLMEnhancedGroceryAgent** adds powerful local reasoning capabilities:
@@ -272,6 +287,7 @@ The `mcps/` directory contains a comprehensive **3-layer bot protection bypass s
 agentic_grocery_price_scanner/
 ├── agents/           # LangGraph agent implementations
 │   ├── intelligent_scraper_agent.py    # 🚀 Advanced LangGraph agent with 3-layer fallback
+│   ├── matcher_agent.py                # 🧠 Intelligent ingredient-to-product matching with vector search + LLMs
 │   ├── scraping_ui.py                  # Real-time UI and progress tracking
 │   ├── database_integration.py         # Database operations with confidence weighting
 │   ├── collection_analytics.py         # Performance analytics and optimization
@@ -312,6 +328,8 @@ test_basic_functionality.py             # 🧪 Core functionality verification
 test_intelligent_scraper_demo.py        # 🎬 Full system demonstration
 test_simple_integration.py              # Quick integration test
 demo_vector_search.py                   # Vector database demonstration
+demo_matcher_agent.py                   # 🧠 MatcherAgent demonstration with sample data
+test_matcher_agent.py                   # 🧪 Comprehensive MatcherAgent test suite
 test_llm_integration.py                 # 🧠 Comprehensive LLM test suite
 test_simple_llm.py                      # Basic LLM connection test
 demo_llm_grocery_tasks.py               # Grocery-specific LLM task demo
@@ -404,6 +422,26 @@ Complete command-line interface for both vector database and intelligent scraper
 - Access performance analytics and optimization recommendations
 - Seamless integration with database storage and vector search
 
+### MatcherAgent Operations (Ingredient-to-Product Matching)
+```bash
+# Single ingredient matching
+grocery-scanner match ingredient --ingredient "milk" --verbose --category "dairy"
+
+# Batch ingredient matching
+grocery-scanner match batch --ingredients "milk,bread,chicken" --output results.json
+
+# Substitution suggestions
+grocery-scanner match substitutions --ingredient "milk" --max-suggestions 5
+
+# Performance analytics
+grocery-scanner match analytics
+
+# Test MatcherAgent functionality
+grocery-scanner match test
+python3 demo_matcher_agent.py           # MatcherAgent demonstration with sample data
+python3 test_matcher_agent.py           # Comprehensive test suite
+```
+
 ### Quick Start Commands:
 ```bash
 # Test basic functionality
@@ -413,6 +451,10 @@ python test_basic_functionality.py
 python3 test_llm_integration.py          # Full LLM test suite
 python3 demo_llm_grocery_tasks.py        # Grocery-specific demos
 python3 llm_integration_example.py       # Enhanced agent example
+
+# Test MatcherAgent (ingredient matching)
+python3 demo_matcher_agent.py            # MatcherAgent demonstration
+python3 test_matcher_agent.py            # MatcherAgent test suite
 
 # Run intelligent scraping with adaptive strategy
 grocery-scanner intelligent-scrape --query "organic milk" --strategy adaptive
