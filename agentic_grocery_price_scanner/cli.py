@@ -1772,6 +1772,471 @@ def test_integration(method: str, query: str) -> None:
     asyncio.run(run_test())
 
 
+# ===== WORKFLOW COMMANDS =====
+
+@cli.group()
+def workflow() -> None:
+    """Master workflow commands for coordinating all agents."""
+    pass
+
+
+@workflow.command("run-complete")
+@click.option(
+    "--recipes-file",
+    type=click.Path(exists=True),
+    help="JSON file containing recipes to process"
+)
+@click.option(
+    "--ingredients",
+    type=str,
+    help="Comma-separated list of ingredients"
+)
+@click.option(
+    "--ingredients-file", 
+    type=click.Path(exists=True),
+    help="File containing ingredients (one per line or JSON)"
+)
+@click.option(
+    "--scraping-strategy",
+    type=click.Choice(["auto_stealth", "human_assisted", "clipboard_manual", "hybrid", "adaptive"]),
+    default="adaptive",
+    help="Scraping strategy to use"
+)
+@click.option(
+    "--matching-strategy",
+    type=click.Choice(["vector_only", "llm_only", "hybrid", "adaptive"]),
+    default="adaptive", 
+    help="Matching strategy to use"
+)
+@click.option(
+    "--optimization-strategy",
+    type=click.Choice(["cost_only", "convenience", "balanced", "quality_first", "time_efficient", "adaptive"]),
+    default="adaptive",
+    help="Optimization strategy to use"
+)
+@click.option(
+    "--stores",
+    type=str,
+    default="metro_ca,walmart_ca,freshco_com",
+    help="Comma-separated list of store IDs to search"
+)
+@click.option(
+    "--max-budget",
+    type=float,
+    help="Maximum budget for shopping"
+)
+@click.option(
+    "--max-stores",
+    type=int,
+    default=3,
+    help="Maximum number of stores to visit"
+)
+@click.option(
+    "--preferred-stores",
+    type=str,
+    help="Comma-separated list of preferred store IDs"
+)
+@click.option(
+    "--parallel/--sequential",
+    default=True,
+    help="Enable parallel processing"
+)
+@click.option(
+    "--timeout",
+    type=int,
+    default=300,
+    help="Workflow timeout in seconds"
+)
+@click.option(
+    "--output",
+    type=click.Path(),
+    help="Save results to JSON file"
+)
+@click.option(
+    "--verbose",
+    is_flag=True,
+    help="Show detailed progress information"
+)
+def run_complete(
+    recipes_file: Optional[str],
+    ingredients: Optional[str], 
+    ingredients_file: Optional[str],
+    scraping_strategy: str,
+    matching_strategy: str,
+    optimization_strategy: str,
+    stores: str,
+    max_budget: Optional[float],
+    max_stores: int,
+    preferred_stores: Optional[str],
+    parallel: bool,
+    timeout: int,
+    output: Optional[str],
+    verbose: bool
+) -> None:
+    """Execute the complete grocery workflow from recipes to optimized shopping list."""
+    
+    async def run_workflow():
+        from .workflow import GroceryWorkflow
+        from .data_models import Recipe, Ingredient
+        from decimal import Decimal
+        import json
+        
+        # Parse input data
+        recipes_list = []
+        ingredients_list = []
+        
+        if recipes_file:
+            with open(recipes_file) as f:
+                recipes_data = json.load(f)
+                for recipe_data in recipes_data:
+                    recipes_list.append(Recipe(**recipe_data))
+        
+        if ingredients_file:
+            with open(ingredients_file) as f:
+                content = f.read().strip()
+                try:
+                    # Try JSON first
+                    data = json.loads(content)
+                    if isinstance(data, list):
+                        ingredients_list.extend(data)
+                except json.JSONDecodeError:
+                    # Parse as lines
+                    ingredients_list.extend(line.strip() for line in content.split('\n') if line.strip())
+        
+        if ingredients:
+            ingredients_list.extend(ing.strip() for ing in ingredients.split(',') if ing.strip())
+        
+        if not recipes_list and not ingredients_list:
+            click.echo("❌ Please provide recipes or ingredients")
+            return
+        
+        # Build configuration
+        config = {
+            "scraping_strategy": scraping_strategy,
+            "matching_strategy": matching_strategy,
+            "optimization_strategy": optimization_strategy,
+            "target_stores": [s.strip() for s in stores.split(',')],
+            "max_stores": max_stores,
+            "enable_parallel_scraping": parallel,
+            "enable_parallel_matching": parallel,
+            "workflow_timeout": timeout,
+        }
+        
+        if max_budget:
+            config["max_budget"] = max_budget
+        
+        if preferred_stores:
+            config["preferred_stores"] = [s.strip() for s in preferred_stores.split(',')]
+        
+        # Progress callback
+        def progress_callback(progress_info):
+            if verbose:
+                stage = progress_info.get("stage", "unknown")
+                message = progress_info.get("message", "")
+                if "ingredient" in progress_info:
+                    click.echo(f"🔄 [{stage}] {progress_info['ingredient']}: {message}")
+                else:
+                    click.echo(f"🔄 [{stage}] {message}")
+        
+        # Initialize workflow
+        click.echo("🚀 Initializing master grocery workflow...")
+        workflow = GroceryWorkflow()
+        
+        try:
+            # Execute workflow
+            click.echo(f"📋 Processing {len(recipes_list)} recipes and {len(ingredients_list)} ingredients...")
+            
+            result = await workflow.execute(
+                recipes=recipes_list or None,
+                ingredients=ingredients_list or None,
+                config=config,
+                progress_callback=progress_callback if verbose else None
+            )
+            
+            # Display results
+            metrics = result["execution_metrics"]
+            summary = result.get("workflow_summary", {})
+            
+            click.echo("\n✅ Workflow completed successfully!")
+            click.echo(f"⏱️  Total execution time: {metrics.total_execution_time:.2f} seconds")
+            click.echo(f"🥘 Ingredients processed: {summary.get('ingredients_processed', 0)}")
+            click.echo(f"🛒 Products collected: {summary.get('products_collected', 0)}")
+            click.echo(f"🎯 Matches found: {summary.get('matches_found', 0)}")
+            
+            success_rates = summary.get("success_rates", {})
+            click.echo(f"📊 Success rates - Scraping: {success_rates.get('scraping', 0):.1%}, "
+                      f"Matching: {success_rates.get('matching', 0):.1%}, "
+                      f"Optimization: {success_rates.get('optimization', 0):.1%}")
+            
+            # Show optimization results
+            optimization_results = result.get("optimization_results")
+            if optimization_results:
+                recommended_strategy = optimization_results.get("recommended_strategy", [])
+                total_savings = optimization_results.get("total_savings", 0)
+                
+                click.echo(f"\n💰 Recommended shopping strategy ({len(recommended_strategy)} trips):")
+                for trip in recommended_strategy:
+                    click.echo(f"  📍 {trip.get('store_name', 'Unknown Store')}: "
+                              f"{trip.get('total_items', 0)} items, "
+                              f"${trip.get('total_cost', 0):.2f}")
+                
+                if total_savings > 0:
+                    click.echo(f"💸 Estimated savings: ${total_savings:.2f} "
+                              f"({optimization_results.get('savings_percentage', 0):.1f}%)")
+            
+            # Save to file if requested
+            if output:
+                with open(output, 'w') as f:
+                    # Convert Decimal to float for JSON serialization
+                    json_result = json.loads(json.dumps(result, default=str))
+                    json.dump(json_result, f, indent=2)
+                click.echo(f"💾 Results saved to {output}")
+            
+        except Exception as e:
+            click.echo(f"❌ Workflow failed: {e}")
+            if verbose:
+                import traceback
+                traceback.print_exc()
+    
+    asyncio.run(run_workflow())
+
+
+@workflow.command("status")
+@click.argument("execution_id", required=False)
+def status(execution_id: Optional[str]) -> None:
+    """Check status of running or completed workflow executions."""
+    from .workflow import GroceryWorkflow
+    
+    workflow = GroceryWorkflow()
+    
+    if execution_id:
+        # Check specific execution
+        status_info = workflow.get_execution_status(execution_id)
+        if status_info:
+            click.echo(f"📊 Execution {execution_id}:")
+            click.echo(f"   Status: {status_info['status']}")
+            if "current_stage" in status_info:
+                click.echo(f"   Stage: {status_info['current_stage']}")
+            click.echo(f"   Time: {status_info['execution_time']:.2f}s")
+            if status_info.get("errors", 0) > 0:
+                click.echo(f"   Errors: {status_info['errors']}")
+        else:
+            click.echo(f"❌ Execution {execution_id} not found")
+    else:
+        # Show active executions
+        if workflow.active_executions:
+            click.echo(f"🔄 Active executions ({len(workflow.active_executions)}):")
+            for exec_id, state in workflow.active_executions.items():
+                click.echo(f"   {exec_id}: {state['workflow_status']} ({state.get('current_stage', 'unknown')})")
+        else:
+            click.echo("💤 No active executions")
+        
+        # Show recent history
+        recent = workflow.execution_history[-5:]  # Last 5 executions
+        if recent:
+            click.echo(f"\n📚 Recent executions:")
+            for metrics in recent:
+                click.echo(f"   {metrics.execution_id}: {metrics.status} ({metrics.total_execution_time:.2f}s)")
+
+
+@workflow.command("cancel")
+@click.argument("execution_id")
+def cancel(execution_id: str) -> None:
+    """Cancel a running workflow execution."""
+    from .workflow import GroceryWorkflow
+    
+    workflow = GroceryWorkflow()
+    
+    if workflow.cancel_execution(execution_id):
+        click.echo(f"✅ Cancelled execution {execution_id}")
+    else:
+        click.echo(f"❌ Execution {execution_id} not found or already completed")
+
+
+@workflow.command("performance")
+def performance() -> None:
+    """Show performance summary across all workflow executions."""
+    from .workflow import GroceryWorkflow
+    
+    workflow = GroceryWorkflow()
+    summary = workflow.get_performance_summary()
+    
+    if "message" in summary:
+        click.echo(f"ℹ️  {summary['message']}")
+        return
+    
+    click.echo("📈 Workflow Performance Summary:")
+    click.echo(f"   Total executions: {summary['total_executions']}")
+    click.echo(f"   Completed: {summary['completed_executions']}")
+    click.echo(f"   Avg execution time: {summary['avg_execution_time']:.2f}s")
+    click.echo(f"   Avg ingredients: {summary['avg_ingredients_processed']:.1f}")
+    click.echo(f"   Avg products collected: {summary['avg_products_collected']:.1f}")
+    
+    success_rates = summary.get('avg_success_rates', {})
+    click.echo("📊 Average success rates:")
+    click.echo(f"   Scraping: {success_rates.get('scraping', 0):.1%}")
+    click.echo(f"   Matching: {success_rates.get('matching', 0):.1%}")
+    click.echo(f"   Optimization: {success_rates.get('optimization', 0):.1%}")
+
+
+@workflow.command("demo")
+@click.option(
+    "--scenario",
+    type=click.Choice(["quick", "family-dinner", "meal-prep", "party", "multi-recipe"]),
+    default="quick",
+    help="Demo scenario to run"
+)
+@click.option(
+    "--verbose",
+    is_flag=True,
+    help="Show detailed progress"
+)
+def demo(scenario: str, verbose: bool) -> None:
+    """Run workflow demonstration with predefined scenarios."""
+    
+    scenarios = {
+        "quick": {
+            "name": "Quick Shopping",
+            "ingredients": ["milk", "bread", "eggs"],
+            "description": "Simple 3-ingredient demo"
+        },
+        "family-dinner": {
+            "name": "Family Dinner",
+            "ingredients": ["chicken breast", "broccoli", "rice", "olive oil", "garlic", "onion"],
+            "description": "6-ingredient family meal"
+        },
+        "meal-prep": {
+            "name": "Weekly Meal Prep", 
+            "ingredients": [
+                "ground turkey", "sweet potatoes", "spinach", "quinoa",
+                "Greek yogurt", "berries", "almonds", "avocados",
+                "bell peppers", "carrots", "brown rice"
+            ],
+            "description": "11-ingredient meal prep list"
+        },
+        "party": {
+            "name": "Party Shopping",
+            "ingredients": [
+                "chips", "dip", "soda", "beer", "cheese", "crackers",
+                "grapes", "strawberries", "chocolate", "ice cream",
+                "paper plates", "napkins", "plastic cups"
+            ],
+            "description": "13-ingredient party supplies"
+        },
+        "multi-recipe": {
+            "name": "Multi-Recipe Demo",
+            "recipes": [
+                {
+                    "name": "Breakfast Smoothie",
+                    "servings": 2,
+                    "ingredients": [
+                        {"name": "banana", "quantity": 2, "unit": "pieces"},
+                        {"name": "Greek yogurt", "quantity": 1, "unit": "cup"},
+                        {"name": "berries", "quantity": 0.5, "unit": "cup"},
+                        {"name": "honey", "quantity": 1, "unit": "tablespoon"}
+                    ]
+                },
+                {
+                    "name": "Pasta Dinner", 
+                    "servings": 4,
+                    "ingredients": [
+                        {"name": "pasta", "quantity": 1, "unit": "pound"},
+                        {"name": "ground beef", "quantity": 1, "unit": "pound"},
+                        {"name": "tomato sauce", "quantity": 2, "unit": "cups"},
+                        {"name": "mozzarella cheese", "quantity": 8, "unit": "ounces"}
+                    ]
+                }
+            ],
+            "description": "2 complete recipes (8 total ingredients)"
+        }
+    }
+    
+    if scenario not in scenarios:
+        click.echo(f"❌ Unknown scenario: {scenario}")
+        return
+    
+    scene = scenarios[scenario]
+    click.echo(f"🎬 Running {scene['name']} demo")
+    click.echo(f"📝 {scene['description']}")
+    click.echo("")
+    
+    async def run_demo():
+        from .workflow import GroceryWorkflow
+        from .data_models import Recipe, Ingredient
+        import json
+        
+        # Progress callback
+        def progress_callback(progress_info):
+            if verbose:
+                stage = progress_info.get("stage", "unknown")
+                message = progress_info.get("message", "")
+                click.echo(f"🔄 [{stage}] {message}")
+        
+        workflow = GroceryWorkflow()
+        
+        try:
+            config = {
+                "scraping_strategy": "adaptive",
+                "matching_strategy": "adaptive", 
+                "optimization_strategy": "balanced",
+                "target_stores": ["metro_ca", "walmart_ca"],
+                "max_stores": 2,
+                "workflow_timeout": 180  # 3 minutes for demo
+            }
+            
+            recipes_list = None
+            ingredients_list = None
+            
+            if "recipes" in scene:
+                recipes_list = [Recipe(**recipe_data) for recipe_data in scene["recipes"]]
+            else:
+                ingredients_list = scene["ingredients"]
+            
+            click.echo("🚀 Starting workflow execution...")
+            start_time = asyncio.get_event_loop().time()
+            
+            result = await workflow.execute(
+                recipes=recipes_list,
+                ingredients=ingredients_list,
+                config=config,
+                progress_callback=progress_callback if verbose else None
+            )
+            
+            execution_time = asyncio.get_event_loop().time() - start_time
+            
+            # Display results
+            click.echo(f"\n✅ Demo completed in {execution_time:.2f} seconds!")
+            
+            summary = result.get("workflow_summary", {})
+            click.echo(f"📊 Results:")
+            click.echo(f"   Ingredients: {summary.get('ingredients_processed', 0)}")
+            click.echo(f"   Products found: {summary.get('products_collected', 0)}")
+            click.echo(f"   Matches: {summary.get('matches_found', 0)}")
+            
+            optimization_results = result.get("optimization_results")
+            if optimization_results:
+                recommended = optimization_results.get("recommended_strategy", [])
+                if recommended:
+                    click.echo(f"   Recommended: {len(recommended)} store visits")
+                    total_cost = sum(float(trip.get("total_cost", 0)) for trip in recommended)
+                    click.echo(f"   Total cost: ${total_cost:.2f}")
+            
+            click.echo(f"\n🎯 This demo showcases the complete workflow:")
+            click.echo(f"   ✓ Ingredient extraction and validation")
+            click.echo(f"   ✓ Parallel product scraping across stores")
+            click.echo(f"   ✓ Intelligent ingredient-to-product matching") 
+            click.echo(f"   ✓ Multi-store shopping optimization")
+            click.echo(f"   ✓ Performance monitoring and error handling")
+            
+        except Exception as e:
+            click.echo(f"❌ Demo failed: {e}")
+            if verbose:
+                import traceback
+                traceback.print_exc()
+    
+    asyncio.run(run_demo())
+
+
 def main() -> None:
     """Entry point for the CLI."""
     cli()
