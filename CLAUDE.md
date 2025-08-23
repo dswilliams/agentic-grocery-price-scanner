@@ -173,6 +173,7 @@ The project implements a **LangGraph-based intelligent multi-agent system** enha
 
 - **IntelligentScraperAgent** (`agents/intelligent_scraper_agent.py`): Advanced LangGraph-based agent with 3-layer fallback system
 - **MatcherAgent** (`agents/matcher_agent.py`): 🧠 Intelligent ingredient-to-product matching using vector search + local LLMs
+- **OptimizerAgent** (`agents/optimizer_agent.py`): 🛒 Multi-store shopping optimization with LangGraph + Phi-3.5 Mini for complex decision-making
 - **LLMEnhancedGroceryAgent** (`llm_client/`): Local LLM integration with Qwen 2.5 1.5B and Phi-3.5 Mini for intelligent reasoning
 - **ScraperAgent** (`agents/scraper_agent.py`): Legacy basic scraper (maintained for compatibility)
 - **MockScraperAgent** (`agents/mock_scraper_agent.py`): Demo agent with mock data for testing
@@ -195,6 +196,19 @@ The **MatcherAgent** provides intelligent ingredient-to-product matching:
 - **🔄 Substitution Engine**: Category-aware alternatives and out-of-stock handling
 - **👤 Human Review Flagging**: Automatic escalation for uncertain matches with detailed reasoning
 - **📈 Performance Analytics**: Real-time matching statistics and strategy optimization
+
+### OptimizerAgent Features 🛒
+The **OptimizerAgent** provides intelligent multi-store shopping optimization:
+- **⚖️ Multi-Criteria Decision Making**: Balance cost, convenience, quality, time, and coverage using weighted scoring
+- **🧠 LangGraph Workflow**: 12-stage optimization pipeline with conditional routing and state management
+- **🤖 Phi-3.5 Mini Integration**: Complex reasoning for strategy selection and trade-off analysis
+- **💰 Cost Optimization**: Cross-store price comparison with bulk buying and sale detection
+- **🚗 Convenience Analysis**: Store consolidation and travel time optimization
+- **⭐ Quality Assessment**: Product quality scoring with collection method confidence weighting
+- **📊 Strategy Comparison**: Side-by-side analysis of 6 optimization strategies (cost_only, convenience, balanced, quality_first, time_efficient, adaptive)
+- **💡 Savings Estimation**: Potential savings analysis comparing current vs optimized shopping methods
+- **🎯 Constraint Handling**: Budget limits, store preferences, quality thresholds, and dietary restrictions
+- **📈 Performance Analytics**: Strategy effectiveness tracking and personalized recommendations
 
 ### Local LLM Integration Features
 The **LLMEnhancedGroceryAgent** adds powerful local reasoning capabilities:
@@ -288,6 +302,7 @@ agentic_grocery_price_scanner/
 ├── agents/           # LangGraph agent implementations
 │   ├── intelligent_scraper_agent.py    # 🚀 Advanced LangGraph agent with 3-layer fallback
 │   ├── matcher_agent.py                # 🧠 Intelligent ingredient-to-product matching with vector search + LLMs
+│   ├── optimizer_agent.py              # 🛒 Multi-store shopping optimization with LangGraph + Phi-3.5 Mini
 │   ├── scraping_ui.py                  # Real-time UI and progress tracking
 │   ├── database_integration.py         # Database operations with confidence weighting
 │   ├── collection_analytics.py         # Performance analytics and optimization
@@ -330,6 +345,8 @@ test_simple_integration.py              # Quick integration test
 demo_vector_search.py                   # Vector database demonstration
 demo_matcher_agent.py                   # 🧠 MatcherAgent demonstration with sample data
 test_matcher_agent.py                   # 🧪 Comprehensive MatcherAgent test suite
+demo_optimizer_agent.py                 # 🛒 Interactive OptimizerAgent demonstration with 8 scenarios
+test_optimizer_agent.py                 # 🧪 Comprehensive OptimizerAgent test suite with 14 test categories
 test_llm_integration.py                 # 🧠 Comprehensive LLM test suite
 test_simple_llm.py                      # Basic LLM connection test
 demo_llm_grocery_tasks.py               # Grocery-specific LLM task demo
@@ -442,6 +459,31 @@ python3 demo_matcher_agent.py           # MatcherAgent demonstration with sample
 python3 test_matcher_agent.py           # Comprehensive test suite
 ```
 
+### OptimizerAgent Operations (Multi-Store Shopping Optimization) 🛒
+```bash
+# Complete shopping list optimization
+grocery-scanner optimize shopping-list --ingredients "milk,bread,eggs" --strategy balanced --max-budget 100 --verbose
+
+# Pure cost optimization (find cheapest options)
+grocery-scanner optimize cost-only --ingredients "milk,bread,chicken" --max-budget 50
+
+# Convenience optimization (single store preferred)
+grocery-scanner optimize convenience --ingredients "milk,bread" --preferred-store metro_ca
+
+# Strategy comparison (compare all optimization approaches)
+grocery-scanner optimize compare-strategies --ingredients "milk,bread,eggs,chicken" --strategies "cost_only,convenience,balanced"
+
+# Savings estimation (estimate potential savings)
+grocery-scanner optimize estimate-savings --ingredients "milk,bread,eggs" --current-method convenience
+
+# Performance analytics
+grocery-scanner optimize analytics
+
+# Test OptimizerAgent functionality
+python3 test_optimizer_agent.py         # Comprehensive OptimizerAgent test suite
+python3 demo_optimizer_agent.py         # Interactive OptimizerAgent demonstration
+```
+
 ### Quick Start Commands:
 ```bash
 # Test basic functionality
@@ -455,6 +497,10 @@ python3 llm_integration_example.py       # Enhanced agent example
 # Test MatcherAgent (ingredient matching)
 python3 demo_matcher_agent.py            # MatcherAgent demonstration
 python3 test_matcher_agent.py            # MatcherAgent test suite
+
+# Test OptimizerAgent (shopping optimization)
+python3 demo_optimizer_agent.py          # Interactive OptimizerAgent demonstration
+python3 test_optimizer_agent.py          # Comprehensive OptimizerAgent test suite
 
 # Run intelligent scraping with adaptive strategy
 grocery-scanner intelligent-scrape --query "organic milk" --strategy adaptive

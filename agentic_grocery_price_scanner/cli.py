@@ -669,6 +669,521 @@ def clear_vectors() -> None:
         click.echo(f"❌ Error clearing vector database: {e}")
 
 
+# Shopping Optimization Commands
+
+@cli.group()
+def optimize():
+    """Multi-store shopping optimization using OptimizerAgent."""
+    pass
+
+
+@optimize.command()
+@click.option(
+    "--ingredients-file", 
+    type=click.Path(exists=True),
+    help="File containing ingredient list (JSON or text)"
+)
+@click.option(
+    "--ingredients", 
+    help="Comma-separated list of ingredients"
+)
+@click.option(
+    "--strategy", 
+    type=click.Choice(["cost_only", "convenience", "balanced", "quality_first", "time_efficient", "adaptive"]),
+    default="adaptive",
+    help="Optimization strategy"
+)
+@click.option(
+    "--max-budget", 
+    type=float,
+    help="Maximum budget constraint"
+)
+@click.option(
+    "--max-stores", 
+    type=int,
+    default=3,
+    help="Maximum number of stores to visit"
+)
+@click.option(
+    "--preferred-stores", 
+    help="Comma-separated list of preferred store IDs"
+)
+@click.option(
+    "--avoid-stores", 
+    help="Comma-separated list of stores to avoid"
+)
+@click.option(
+    "--quality-threshold", 
+    type=float,
+    default=0.7,
+    help="Minimum quality threshold for products"
+)
+@click.option(
+    "--output", 
+    type=click.Path(),
+    help="Output file for optimization results (JSON)"
+)
+@click.option(
+    "--verbose", 
+    is_flag=True,
+    help="Show detailed optimization process"
+)
+def shopping_list(ingredients_file: str, ingredients: str, strategy: str, max_budget: float,
+                 max_stores: int, preferred_stores: str, avoid_stores: str, 
+                 quality_threshold: float, output: str, verbose: bool) -> None:
+    """Optimize complete shopping list across multiple stores."""
+    from .agents.optimizer_agent import OptimizerAgent, OptimizationCriteria
+    from .data_models.ingredient import Ingredient
+    from .data_models.base import UnitType
+    import asyncio
+    import json
+    from decimal import Decimal
+    
+    async def run_optimization():
+        try:
+            # Parse ingredients
+            ingredient_list = []
+            
+            if ingredients_file:
+                with open(ingredients_file, 'r') as f:
+                    content = f.read().strip()
+                    try:
+                        # Try to parse as JSON
+                        data = json.loads(content)
+                        if isinstance(data, list):
+                            for item in data:
+                                if isinstance(item, str):
+                                    ingredient_list.append(Ingredient(name=item, quantity=1.0, unit=UnitType.PIECES))
+                                elif isinstance(item, dict):
+                                    ingredient_list.append(Ingredient(**item))
+                    except json.JSONDecodeError:
+                        # Parse as line-separated text
+                        for line in content.split('\n'):
+                            line = line.strip()
+                            if line:
+                                ingredient_list.append(Ingredient(name=line, quantity=1.0, unit=UnitType.PIECES))
+            
+            elif ingredients:
+                for ingredient_name in ingredients.split(','):
+                    ingredient_name = ingredient_name.strip()
+                    if ingredient_name:
+                        ingredient_list.append(Ingredient(name=ingredient_name, quantity=1.0, unit=UnitType.PIECES))
+            
+            else:
+                click.echo("❌ Please provide either --ingredients-file or --ingredients")
+                return
+            
+            if not ingredient_list:
+                click.echo("❌ No ingredients found")
+                return
+            
+            # Create optimization criteria
+            criteria = OptimizationCriteria(
+                max_budget=Decimal(str(max_budget)) if max_budget else None,
+                max_stores=max_stores,
+                preferred_stores=preferred_stores.split(',') if preferred_stores else [],
+                avoid_stores=avoid_stores.split(',') if avoid_stores else [],
+                quality_threshold=quality_threshold
+            )
+            
+            click.echo(f"🛒 Optimizing shopping list for {len(ingredient_list)} ingredients...")
+            if verbose:
+                click.echo(f"   Strategy: {strategy}")
+                click.echo(f"   Max budget: ${max_budget}" if max_budget else "   Budget: No limit")
+                click.echo(f"   Max stores: {max_stores}")
+                click.echo(f"   Quality threshold: {quality_threshold}")
+            
+            # Initialize optimizer
+            optimizer = OptimizerAgent()
+            
+            # Progress callback
+            def progress_callback(message: str):
+                if verbose:
+                    click.echo(f"   {message}")
+            
+            # Run optimization
+            result = await optimizer.optimize_shopping_list(
+                ingredients=ingredient_list,
+                criteria=criteria,
+                strategy=strategy
+            )
+            
+            if result['success']:
+                # Display results
+                recommended_trips = result['recommended_strategy']
+                savings_analysis = result['savings_analysis']
+                optimization_summary = result['optimization_summary']
+                
+                click.echo(f"✅ Optimization complete!")
+                click.echo(f"   Selected strategy: {optimization_summary['selected_strategy']}")
+                click.echo(f"   Total stores: {optimization_summary['total_stores']}")
+                click.echo(f"   Total cost: ${savings_analysis['optimized_cost']:.2f}")
+                click.echo(f"   Total savings: ${savings_analysis['total_savings']:.2f} ({savings_analysis['savings_percentage']:.1f}%)")
+                click.echo(f"   Coverage: {optimization_summary['coverage_percentage']:.1f}%")
+                click.echo(f"   Estimated time: {optimization_summary['total_time']} minutes")
+                
+                click.echo("\n🏪 Shopping Plan:")
+                for i, trip in enumerate(recommended_trips, 1):
+                    click.echo(f"\n{i}. {trip['store_name']} ({trip['store_id']})")
+                    click.echo(f"   Items: {trip['total_items']}")
+                    click.echo(f"   Cost: ${trip['total_cost']:.2f}")
+                    click.echo(f"   Time: {trip['estimated_time']} minutes")
+                    
+                    if verbose:
+                        click.echo("   Products:")
+                        for product_info in trip['products']:
+                            product = product_info['product']
+                            ingredient = product_info['ingredient']
+                            price_display = f"${product['price']}"
+                            if product['on_sale'] and product['sale_price']:
+                                price_display = f"${product['sale_price']} (was ${product['price']}) 🏷️"
+                            click.echo(f"     • {ingredient['name']} → {product['name']} - {price_display}")
+                
+                # Show alternative strategies
+                alternatives = result.get('alternative_strategies', {})
+                if alternatives and verbose:
+                    click.echo("\n📊 Alternative Strategies:")
+                    for alt_name, alt_data in alternatives.items():
+                        click.echo(f"   {alt_name}: ${alt_data['total_cost']:.2f} ({alt_data['total_stores']} stores, {alt_data['total_time']} min)")
+                
+                # Show unmatched ingredients
+                unmatched = result.get('unmatched_ingredients', [])
+                if unmatched:
+                    click.echo(f"\n⚠️  Unmatched ingredients ({len(unmatched)}):")
+                    for ing in unmatched:
+                        click.echo(f"   • {ing['name']} ({ing['quantity']} {ing['unit']})")
+                
+                # Show selection reasoning
+                if verbose and optimization_summary.get('selection_reasoning'):
+                    click.echo(f"\n💡 Selection reasoning: {optimization_summary['selection_reasoning']}")
+                
+                # Save results if requested
+                if output:
+                    with open(output, 'w') as f:
+                        json.dump(result, f, indent=2, default=str)
+                    click.echo(f"\n💾 Results saved to {output}")
+            
+            else:
+                click.echo(f"❌ Optimization failed: {result.get('error', 'Unknown error')}")
+        
+        except Exception as e:
+            click.echo(f"❌ Error during optimization: {e}")
+    
+    asyncio.run(run_optimization())
+
+
+@optimize.command()
+@click.option(
+    "--ingredients", 
+    required=True,
+    help="Comma-separated list of ingredients"
+)
+@click.option(
+    "--max-budget", 
+    type=float,
+    help="Maximum budget constraint"
+)
+def cost_only(ingredients: str, max_budget: float) -> None:
+    """Pure cost optimization strategy."""
+    from .agents.optimizer_agent import OptimizerAgent, OptimizationCriteria
+    from .data_models.ingredient import Ingredient
+    from .data_models.base import UnitType
+    import asyncio
+    from decimal import Decimal
+    
+    async def run_cost_optimization():
+        try:
+            # Parse ingredients
+            ingredient_list = []
+            for ingredient_name in ingredients.split(','):
+                ingredient_name = ingredient_name.strip()
+                if ingredient_name:
+                    ingredient_list.append(Ingredient(name=ingredient_name, quantity=1.0, unit=UnitType.PIECES))
+            
+            criteria = OptimizationCriteria(
+                max_budget=Decimal(str(max_budget)) if max_budget else None,
+                max_stores=10  # Allow many stores for cost optimization
+            )
+            
+            click.echo(f"💰 Cost-only optimization for {len(ingredient_list)} ingredients...")
+            
+            optimizer = OptimizerAgent()
+            result = await optimizer.optimize_shopping_list(
+                ingredients=ingredient_list,
+                criteria=criteria,
+                strategy="cost_only"
+            )
+            
+            if result['success']:
+                savings_analysis = result['savings_analysis']
+                click.echo(f"✅ Cheapest option found!")
+                click.echo(f"   Total cost: ${savings_analysis['optimized_cost']:.2f}")
+                click.echo(f"   Stores needed: {len(result['recommended_strategy'])}")
+                click.echo(f"   Savings vs convenience: ${savings_analysis['total_savings']:.2f} ({savings_analysis['savings_percentage']:.1f}%)")
+                
+                # Show store breakdown
+                for trip in result['recommended_strategy']:
+                    click.echo(f"   {trip['store_name']}: ${trip['total_cost']:.2f} ({trip['total_items']} items)")
+            else:
+                click.echo(f"❌ Cost optimization failed: {result.get('error', 'Unknown error')}")
+        
+        except Exception as e:
+            click.echo(f"❌ Error: {e}")
+    
+    asyncio.run(run_cost_optimization())
+
+
+@optimize.command()
+@click.option(
+    "--ingredients", 
+    required=True,
+    help="Comma-separated list of ingredients"
+)
+@click.option(
+    "--preferred-store", 
+    help="Preferred store for convenience shopping"
+)
+def convenience(ingredients: str, preferred_store: str) -> None:
+    """Convenience optimization (single store preferred)."""
+    from .agents.optimizer_agent import OptimizerAgent, OptimizationCriteria
+    from .data_models.ingredient import Ingredient
+    from .data_models.base import UnitType
+    import asyncio
+    
+    async def run_convenience_optimization():
+        try:
+            # Parse ingredients
+            ingredient_list = []
+            for ingredient_name in ingredients.split(','):
+                ingredient_name = ingredient_name.strip()
+                if ingredient_name:
+                    ingredient_list.append(Ingredient(name=ingredient_name, quantity=1.0, unit=UnitType.PIECES))
+            
+            criteria = OptimizationCriteria(
+                max_stores=1,
+                preferred_stores=[preferred_store] if preferred_store else []
+            )
+            
+            click.echo(f"🚗 Convenience optimization for {len(ingredient_list)} ingredients...")
+            if preferred_store:
+                click.echo(f"   Preferred store: {preferred_store}")
+            
+            optimizer = OptimizerAgent()
+            result = await optimizer.optimize_shopping_list(
+                ingredients=ingredient_list,
+                criteria=criteria,
+                strategy="convenience"
+            )
+            
+            if result['success'] and result['recommended_strategy']:
+                trip = result['recommended_strategy'][0]
+                savings_analysis = result['savings_analysis']
+                
+                click.echo(f"✅ Convenience option found!")
+                click.echo(f"   Store: {trip['store_name']}")
+                click.echo(f"   Total cost: ${trip['total_cost']:.2f}")
+                click.echo(f"   Items available: {trip['total_items']}")
+                click.echo(f"   Shopping time: {trip['estimated_time']} minutes")
+                
+                # Show coverage
+                coverage = result['optimization_summary']['coverage_percentage']
+                click.echo(f"   Coverage: {coverage:.1f}%")
+                
+                if coverage < 100:
+                    unmatched = result.get('unmatched_ingredients', [])
+                    click.echo(f"   Missing items: {', '.join(ing['name'] for ing in unmatched)}")
+            else:
+                click.echo(f"❌ Convenience optimization failed: {result.get('error', 'Unknown error')}")
+        
+        except Exception as e:
+            click.echo(f"❌ Error: {e}")
+    
+    asyncio.run(run_convenience_optimization())
+
+
+@optimize.command()
+@click.option(
+    "--strategies", 
+    default="cost_only,convenience,balanced",
+    help="Comma-separated strategies to compare"
+)
+@click.option(
+    "--ingredients", 
+    required=True,
+    help="Comma-separated list of ingredients"
+)
+def compare_strategies(strategies: str, ingredients: str) -> None:
+    """Compare multiple optimization strategies side-by-side."""
+    from .agents.optimizer_agent import OptimizerAgent
+    from .data_models.ingredient import Ingredient
+    from .data_models.base import UnitType
+    import asyncio
+    
+    async def run_comparison():
+        try:
+            # Parse ingredients
+            ingredient_list = []
+            for ingredient_name in ingredients.split(','):
+                ingredient_name = ingredient_name.strip()
+                if ingredient_name:
+                    ingredient_list.append(Ingredient(name=ingredient_name, quantity=1.0, unit=UnitType.PIECES))
+            
+            strategy_list = [s.strip() for s in strategies.split(',')]
+            
+            click.echo(f"⚖️  Comparing {len(strategy_list)} strategies for {len(ingredient_list)} ingredients...")
+            
+            optimizer = OptimizerAgent()
+            results = await optimizer.compare_strategies(
+                ingredients=ingredient_list,
+                strategies=strategy_list
+            )
+            
+            click.echo("\n📊 Strategy Comparison:")
+            click.echo("-" * 80)
+            
+            # Table header
+            click.echo(f"{'Strategy':<15} {'Cost':<10} {'Stores':<8} {'Time':<8} {'Coverage':<10} {'Savings':<10}")
+            click.echo("-" * 80)
+            
+            for strategy, result in results.items():
+                if result['success']:
+                    cost = result['savings_analysis']['optimized_cost']
+                    stores = result['optimization_summary']['total_stores']
+                    time_min = result['optimization_summary']['total_time']
+                    coverage = result['optimization_summary']['coverage_percentage']
+                    savings = result['savings_analysis']['savings_percentage']
+                    
+                    click.echo(f"{strategy:<15} ${cost:<9.2f} {stores:<8} {time_min:<8} {coverage:<9.1f}% {savings:<9.1f}%")
+                else:
+                    click.echo(f"{strategy:<15} {'FAILED':<50}")
+            
+            # Highlight best options
+            valid_results = {k: v for k, v in results.items() if v['success']}
+            if valid_results:
+                click.echo("\n🏆 Best Options:")
+                
+                # Best cost
+                best_cost = min(valid_results.items(), key=lambda x: x[1]['savings_analysis']['optimized_cost'])
+                click.echo(f"   Lowest cost: {best_cost[0]} (${best_cost[1]['savings_analysis']['optimized_cost']:.2f})")
+                
+                # Best convenience (fewest stores)
+                best_convenience = min(valid_results.items(), key=lambda x: x[1]['optimization_summary']['total_stores'])
+                click.echo(f"   Most convenient: {best_convenience[0]} ({best_convenience[1]['optimization_summary']['total_stores']} stores)")
+                
+                # Best time
+                best_time = min(valid_results.items(), key=lambda x: x[1]['optimization_summary']['total_time'])
+                click.echo(f"   Fastest: {best_time[0]} ({best_time[1]['optimization_summary']['total_time']} minutes)")
+        
+        except Exception as e:
+            click.echo(f"❌ Error during comparison: {e}")
+    
+    asyncio.run(run_comparison())
+
+
+@optimize.command()
+def analytics() -> None:
+    """Show OptimizerAgent performance analytics."""
+    from .agents.optimizer_agent import OptimizerAgent
+    
+    try:
+        optimizer = OptimizerAgent()
+        analytics = optimizer.get_optimization_analytics()
+        
+        click.echo("📊 OptimizerAgent Performance Analytics:")
+        click.echo("")
+        
+        stats = analytics['optimization_stats']
+        click.echo(f"Total optimizations: {stats['total_optimizations']}")
+        
+        if stats['total_optimizations'] > 0:
+            click.echo(f"Average savings: {stats['avg_savings_percentage']:.1f}%")
+            click.echo(f"Average stores reduced: {stats['avg_stores_reduced']:.1f}")
+            
+            # Strategy usage
+            strategy_perf = stats['strategy_performance']
+            if any(perf['uses'] > 0 for perf in strategy_perf.values()):
+                click.echo("")
+                click.echo("Strategy Usage:")
+                for strategy, perf in strategy_perf.items():
+                    if perf['uses'] > 0:
+                        click.echo(f"  {strategy}: {perf['uses']} times")
+        
+        # Recommendations
+        recommendations = analytics['recommendations']
+        if recommendations:
+            click.echo("")
+            click.echo("Recommendations:")
+            for rec in recommendations:
+                click.echo(f"  • {rec}")
+        else:
+            click.echo("\n✅ No optimization recommendations at this time")
+    
+    except Exception as e:
+        click.echo(f"❌ Error getting analytics: {e}")
+
+
+@optimize.command()
+@click.option(
+    "--ingredients", 
+    required=True,
+    help="Comma-separated list of ingredients"
+)
+@click.option(
+    "--current-method", 
+    type=click.Choice(["convenience", "cost_only", "balanced"]),
+    default="convenience",
+    help="Current shopping method for comparison"
+)
+def estimate_savings(ingredients: str, current_method: str) -> None:
+    """Estimate potential savings from optimization."""
+    from .agents.optimizer_agent import OptimizerAgent
+    from .data_models.ingredient import Ingredient
+    from .data_models.base import UnitType
+    import asyncio
+    
+    async def run_estimate():
+        try:
+            # Parse ingredients
+            ingredient_list = []
+            for ingredient_name in ingredients.split(','):
+                ingredient_name = ingredient_name.strip()
+                if ingredient_name:
+                    ingredient_list.append(Ingredient(name=ingredient_name, quantity=1.0, unit=UnitType.PIECES))
+            
+            click.echo(f"💡 Estimating savings potential for {len(ingredient_list)} ingredients...")
+            click.echo(f"   Current method: {current_method}")
+            
+            optimizer = OptimizerAgent()
+            estimate = await optimizer.estimate_savings(
+                ingredients=ingredient_list,
+                current_shopping_method=current_method
+            )
+            
+            if estimate.get('success', True):
+                current_cost = estimate['current_cost']
+                optimized_cost = estimate['optimized_cost']
+                potential_savings = estimate['potential_savings']
+                savings_percentage = estimate['savings_percentage']
+                recommendation = estimate['recommendation']
+                
+                click.echo(f"✅ Savings estimate:")
+                click.echo(f"   Current cost ({current_method}): ${current_cost:.2f}")
+                click.echo(f"   Optimized cost: ${optimized_cost:.2f}")
+                click.echo(f"   Potential savings: ${potential_savings:.2f} ({savings_percentage:.1f}%)")
+                
+                if recommendation == "optimization_worthwhile":
+                    click.echo("   💰 Recommendation: Optimization could provide significant savings!")
+                else:
+                    click.echo("   ℹ️  Recommendation: Current method is already quite efficient")
+            else:
+                click.echo(f"❌ Estimation failed: {estimate.get('error', 'Unknown error')}")
+        
+        except Exception as e:
+            click.echo(f"❌ Error during estimation: {e}")
+    
+    asyncio.run(run_estimate())
+
+
 # Ingredient Matching Commands
 
 @cli.group()
